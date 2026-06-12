@@ -23,11 +23,14 @@ export interface AIProvider {
 }
 
 import { GeminiProvider } from "./gemini";
+import { GroqProvider } from "./groq";
 
 /** Selects the active provider from env (defaults to Gemini). */
 export function getProvider(): AIProvider {
   const provider = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
   switch (provider) {
+    case "groq":
+      return new GroqProvider();
     case "gemini":
     default:
       return new GeminiProvider();
