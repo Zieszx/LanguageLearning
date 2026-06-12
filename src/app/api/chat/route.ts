@@ -74,28 +74,40 @@ export async function POST(request: Request) {
     // Stream the raw model text when asked (and supported). The client shows
     // the reply as it arrives and parses the full JSON once the stream ends.
     if (body.stream && provider.generateStream) {
-      const encoder = new TextEncoder();
-      const iterator = provider.generateStream(providerReq);
-      const stream = new ReadableStream<Uint8Array>({
-        async pull(controller) {
-          try {
-            const { value, done } = await iterator.next();
-            if (done) {
-              controller.close();
-              return;
+      try {
+        const iterator = provider.generateStream(providerReq);
+        // Pull the first chunk now: if the provider errors (bad key, model,
+        // unsupported params), it throws HERE — caught below and handled as a
+        // clean JSON response instead of a half-open stream that the platform
+        // would turn into an HTML 500 page.
+        const first = await iterator.next();
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            try {
+              if (!first.done && first.value) {
+                controller.enqueue(encoder.encode(first.value));
+              }
+              for (;;) {
+                const { value, done } = await iterator.next();
+                if (done) break;
+                if (value) controller.enqueue(encoder.encode(value));
+              }
+            } catch {
+              /* end the stream; client parses what arrived */
             }
-            controller.enqueue(encoder.encode(value));
-          } catch (e) {
-            controller.error(e);
-          }
-        },
-      });
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/plain; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-        },
-      });
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+          },
+        });
+      } catch {
+        // Streaming failed before any output — fall back to a normal request.
+      }
     }
 
     const raw = await provider.generate(providerReq);

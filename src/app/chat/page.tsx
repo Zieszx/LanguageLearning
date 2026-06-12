@@ -79,7 +79,19 @@ function ChatInner() {
           }
           reply = parseReply(raw);
         } else {
-          const data = await res.json();
+          // Non-stream response: parse defensively so an HTML error page
+          // doesn't surface as a cryptic "Unexpected token '<'".
+          const text = await res.text();
+          let data: { error?: string } & Partial<AssistantReply> = {};
+          try {
+            data = JSON.parse(text);
+          } catch {
+            throw new Error(
+              res.ok
+                ? "The server returned an unexpected response. Please try again."
+                : `Request failed (${res.status}). Please try again.`,
+            );
+          }
           if (!res.ok) throw new Error(data.error ?? "Request failed");
           reply = data as AssistantReply;
         }

@@ -35,6 +35,11 @@ export class GroqProvider implements AIProvider {
         )}`
       : req.systemPrompt;
 
+    // Use JSON mode for non-streaming calls. For streaming we omit it — some
+    // models reject `response_format` together with `stream`, and the prompt
+    // above already mandates a single JSON object (parseReply tolerates it).
+    const useJsonMode = Boolean(req.jsonSchema) && !stream;
+
     return JSON.stringify({
       model: this.model,
       temperature: 0.8,
@@ -43,7 +48,7 @@ export class GroqProvider implements AIProvider {
         { role: "system", content: systemContent },
         ...req.messages.map((m) => ({ role: m.role, content: m.content })),
       ],
-      ...(req.jsonSchema ? { response_format: { type: "json_object" } } : {}),
+      ...(useJsonMode ? { response_format: { type: "json_object" } } : {}),
     });
   }
 
