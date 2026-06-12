@@ -52,14 +52,28 @@ export async function* parseSSE(
 import { GeminiProvider } from "./gemini";
 import { GroqProvider } from "./groq";
 
-/** Selects the active provider from env (defaults to Gemini). */
+/**
+ * Selects the active provider. Prefers an explicit `AI_PROVIDER`, but if that's
+ * missing or unrecognized we infer from the model name and which API key is
+ * present — so a Groq model id like `llama-3.3-70b-versatile` doesn't get sent
+ * to Gemini (a common misconfiguration).
+ */
 export function getProvider(): AIProvider {
-  const provider = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
-  switch (provider) {
-    case "groq":
-      return new GroqProvider();
-    case "gemini":
-    default:
-      return new GeminiProvider();
+  const explicit = (process.env.AI_PROVIDER ?? "").trim().toLowerCase();
+  if (explicit === "groq") return new GroqProvider();
+  if (explicit === "gemini") return new GeminiProvider();
+
+  const model = (process.env.AI_MODEL ?? "").toLowerCase();
+  const looksGroq =
+    /llama|mixtral|gemma2|qwen|kimi|gpt-oss|deepseek|moonshot|groq|whisper/.test(
+      model,
+    );
+  const hasGroqKey = Boolean(process.env.GROQ_API_KEY);
+  const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY);
+
+  if (looksGroq || (hasGroqKey && !hasGeminiKey)) return new GroqProvider();
+  if (model.startsWith("gemini") || (hasGeminiKey && !hasGroqKey)) {
+    return new GeminiProvider();
   }
+  return new GeminiProvider();
 }
