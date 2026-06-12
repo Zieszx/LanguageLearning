@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, GraduationCap, Loader2, Volume2 } from "lucide-react";
 import { getLanguage } from "@/lib/languages";
+import { speak as speakText } from "@/lib/speak";
 import { actionGetDueReviews, actionGradeReview } from "@/app/data-actions";
 import type { ReviewCard } from "@/lib/db";
 import type { LanguageCode } from "@/lib/types";
@@ -23,14 +24,7 @@ export default function ReviewPage() {
   }, []);
 
   function speak(text: string, code: LanguageCode) {
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = getLanguage(code).speechCode;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    } catch {
-      /* not supported */
-    }
+    void speakText(text, { fallbackLang: getLanguage(code).speechCode });
   }
 
   async function grade(g: "again" | "good" | "easy") {

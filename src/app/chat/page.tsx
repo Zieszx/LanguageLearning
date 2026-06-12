@@ -9,6 +9,7 @@ import { getScenario } from "@/lib/scenarios";
 import { genId } from "@/lib/storage";
 import { extractPartialReply, parseReply } from "@/lib/parseReply";
 import { useAccount } from "@/lib/account";
+import { useSettings } from "@/lib/useSettings";
 import {
   loadCharacters,
   loadConversation,
@@ -29,10 +30,12 @@ import { VoiceInputButton } from "@/components/VoiceInputButton";
 function ChatInner() {
   const params = useSearchParams();
   const { signedIn } = useAccount();
+  const { settings } = useSettings();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [autoPlayIndex, setAutoPlayIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -110,6 +113,8 @@ function ChatInner() {
           updatedAt: Date.now(),
         };
         setConversation(updated);
+        // Mark this freshly arrived reply for auto-play.
+        setAutoPlayIndex(updated.messages.length - 1);
         void storeConversation(signedIn, updated);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -222,6 +227,7 @@ function ChatInner() {
             message={m}
             language={conversation.languageCode}
             showRomanization
+            autoPlay={settings.voiceEnabled && i === autoPlayIndex}
           />
         ))}
 

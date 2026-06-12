@@ -1,38 +1,52 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Languages, Plus, Sparkles, Volume2, Wand2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Languages, Loader2, Plus, Sparkles, Volume2, Wand2 } from "lucide-react";
 import { getLanguage } from "@/lib/languages";
 import { useAccount } from "@/lib/account";
 import { saveVocab } from "@/lib/data";
+import { speak as speakText } from "@/lib/speak";
 import type { ChatMessage, LanguageCode } from "@/lib/types";
 
 interface Props {
   message: ChatMessage;
   language: LanguageCode;
   showRomanization: boolean;
+  /** Speak this message automatically once (set for a freshly arrived reply). */
+  autoPlay?: boolean;
 }
 
-/** Finds the best installed speech voice for a BCP-47 code, e.g. "ms-MY". */
-function pickVoice(
-  voices: SpeechSynthesisVoice[],
-  code: string,
-): SpeechSynthesisVoice | null {
-  const target = code.toLowerCase();
-  const base = target.split("-")[0];
-  return (
-    voices.find((v) => v.lang.toLowerCase() === target) ??
-    voices.find((v) => v.lang.toLowerCase().replace("_", "-") === target) ??
-    voices.find((v) => v.lang.toLowerCase().startsWith(base)) ??
-    null
-  );
-}
-
-export function MessageBubble({ message, language, showRomanization }: Props) {
+export function MessageBubble({
+  message,
+  language,
+  showRomanization,
+  autoPlay = false,
+}: Props) {
   const { signedIn } = useAccount();
   const [showTranslation, setShowTranslation] = useState(false);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const [audioState, setAudioState] = useState<"idle" | "loading" | "playing">(
+    "idle",
+  );
+  const autoPlayedRef = useRef(false);
   const lang = getLanguage(language);
+
+  function speak() {
+    setAudioState("loading");
+    void speakText(message.content, {
+      fallbackLang: lang.speechCode,
+      onEnd: () => setAudioState("idle"),
+    }).then(() => setAudioState((s) => (s === "loading" ? "playing" : s)));
+  }
+
+  // Auto-play a freshly arrived reply once (browser autoplay rules permitting).
+  useEffect(() => {
+    if (autoPlay && !autoPlayedRef.current && message.role === "assistant") {
+      autoPlayedRef.current = true;
+      speak();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlay]);
 
   if (message.role === "user") {
     return (
@@ -44,35 +58,6 @@ export function MessageBubble({ message, language, showRomanization }: Props) {
     );
   }
 
-  function speak() {
-    try {
-      const synth = window.speechSynthesis;
-
-      const run = () => {
-        const utterance = new SpeechSynthesisUtterance(message.content);
-        utterance.lang = lang.speechCode;
-        // Browsers don't auto-pick a voice for the requested language, so a
-        // non-English language (Malay, Mandarin, Korean…) often stays silent.
-        // Explicitly choose the closest matching installed voice.
-        const voice = pickVoice(synth.getVoices(), lang.speechCode);
-        if (voice) utterance.voice = voice;
-        synth.cancel();
-        synth.speak(utterance);
-      };
-
-      // Voices load asynchronously in some browsers (notably Chrome): the first
-      // getVoices() call returns []. Wait for them before speaking.
-      if (synth.getVoices().length === 0) {
-        synth.addEventListener("voiceschanged", run, { once: true });
-        synth.getVoices(); // nudge the browser to load them
-      } else {
-        run();
-      }
-    } catch {
-      /* speech not supported */
-    }
-  }
-
   function save(word: string, meaning: string) {
     void saveVocab(signedIn, { word, meaning, language });
     setSaved((prev) => ({ ...prev, [word]: true }));
@@ -80,8 +65,6 @@ export function MessageBubble({ message, language, showRomanization }: Props) {
 
   const corrections = message.corrections ?? [];
   const suggestions = message.vocabSuggestions ?? [];
-  const canSpeak =
-    typeof window !== "undefined" && "speechSynthesis" in window;
 
   return (
     <div className="flex max-w-[92%] flex-col gap-2">
@@ -123,17 +106,23 @@ export function MessageBubble({ message, language, showRomanization }: Props) {
         )}
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          {canSpeak && (
-            <button
-              type="button"
-              onClick={speak}
-              aria-label="Read aloud"
-              className="flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-            >
+          <button
+            type="button"
+            onClick={speak}
+            aria-label="Read aloud"
+            className={`flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors hover:bg-surface-2 hover:text-foreground ${
+              audioState === "playing"
+                ? "text-accent"
+                : "text-muted-foreground"
+            }`}
+          >
+            {audioState === "loading" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
               <Volume2 className="h-4 w-4" />
-              Listen
-            </button>
-          )}
+            )}
+            {audioState === "playing" ? "Playing…" : "Listen"}
+          </button>
           {message.translation && (
             <button
               type="button"
