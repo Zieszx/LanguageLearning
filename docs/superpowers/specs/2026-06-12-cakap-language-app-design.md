@@ -132,13 +132,22 @@ Soft & friendly modern aesthetic ("claymorphism-lite"), with light and dark mode
 - `lib/srs.ts` — pure spaced-repetition scheduling logic.
 - `lib/languages.ts` — language config (name, code, romanization scheme, voices).
 
-## 8. Testing
+## 8. Deployment
+- **Host:** Vercel (free tier). Vercel runs Next.js with server-side route
+  handlers, so `/api/chat` works and the AI API key stays in a server-side
+  environment variable — never exposed to the browser.
+- The existing `.github/workflows/nextjs.yml` (GitHub Pages) is **not** used,
+  because GitHub Pages is static-only and cannot run API routes. It will be
+  removed or left inert.
+- Local development uses `npm run dev`, where API routes also work.
+
+## 9. Testing
 - Unit tests for pure logic: `lib/storage.ts`, `lib/prompts.ts`, `lib/srs.ts`
   (no network).
 - `/api/chat` tested with a mocked provider.
 - Manual/responsive checks at 375px, 768px, 1024px, 1440px in both themes.
 
-## 9. Phased Delivery
+## 10. Phased Delivery
 
 The full vision above is large; build in phases so a usable app exists early.
 
@@ -152,6 +161,6 @@ The full vision above is large; build in phases so a usable app exists early.
 - **Phase 4 — Data & polish:** export/import backup, settings completeness,
   accessibility/responsive pass, optional user-supplied API key.
 
-## 10. Open Items / Future
+## 11. Open Items / Future
 - Swap Groq → Claude (or other) once paid API access is desired (env var only).
 - Possible future: cloud sync / accounts, native apps, additional languages.
