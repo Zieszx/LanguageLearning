@@ -1,21 +1,51 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookMarked, Home, Moon, Settings, Sun } from "lucide-react";
+import { BookMarked, Home, Moon, Settings, ShieldCheck, Sun } from "lucide-react";
 import { useSettings } from "@/lib/useSettings";
 import { resolveDark } from "@/lib/theme";
+import { createClient } from "@/lib/supabase/client";
 
-const NAV = [
+const BASE_NAV = [
   { href: "/", label: "Home", icon: Home },
   { href: "/vocab", label: "Vocabulary", icon: BookMarked },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
+const ADMIN_NAV = { href: "/admin", label: "Admin", icon: ShieldCheck };
+
+const HIDDEN_ON = ["/login", "/auth", "/set-password"];
 
 export function Header() {
   const pathname = usePathname();
   const { settings, update, loaded } = useSettings();
   const isDark = loaded && resolveDark(settings.theme);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (active) setIsAdmin(data?.role === "admin");
+    })();
+    return () => {
+      active = false;
+    };
+  }, [pathname]);
+
+  const NAV = isAdmin ? [...BASE_NAV, ADMIN_NAV] : BASE_NAV;
+
+  if (HIDDEN_ON.some((p) => pathname.startsWith(p))) return null;
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-md">

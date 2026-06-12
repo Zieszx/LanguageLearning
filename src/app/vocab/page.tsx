@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BookMarked, Trash2 } from "lucide-react";
 import { getLanguage } from "@/lib/languages";
-import { getVocab, removeVocab } from "@/lib/storage";
+import { getVocab, removeVocab } from "@/lib/data";
 import type { VocabWord } from "@/lib/types";
 
 export default function VocabPage() {
@@ -12,12 +12,21 @@ export default function VocabPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    setWords(getVocab());
-    setLoaded(true);
+    let active = true;
+    void (async () => {
+      const list = await getVocab();
+      if (!active) return;
+      setWords(list);
+      setLoaded(true);
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  function handleRemove(id: string) {
-    setWords(removeVocab(id));
+  async function handleRemove(id: string) {
+    setWords((prev) => prev.filter((w) => w.id !== id));
+    await removeVocab(id);
   }
 
   if (!loaded) {

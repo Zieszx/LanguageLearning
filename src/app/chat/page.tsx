@@ -6,13 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Send } from "lucide-react";
 import { getLanguage } from "@/lib/languages";
 import { getScenario } from "@/lib/scenarios";
-import {
-  genId,
-  getConversation,
-  getSettings,
-  getVocab,
-  saveConversation,
-} from "@/lib/storage";
+import { getSettings } from "@/lib/storage";
+import { getConversation, getVocab, saveConversation } from "@/lib/data";
 import type {
   AssistantReply,
   ChatMessage,
@@ -34,6 +29,7 @@ function ChatInner() {
     setLoading(true);
     setError(null);
     try {
+      const allVocab = await getVocab();
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,7 +37,7 @@ function ChatInner() {
           languageCode: convo.languageCode,
           level: convo.level,
           scenarioId: convo.scenarioId,
-          vocab: getVocab()
+          vocab: allVocab
             .filter((v) => v.language === convo.languageCode)
             .map((v) => ({ word: v.word })),
           messages: convo.messages.map((m) => ({
@@ -68,7 +64,7 @@ function ChatInner() {
         updatedAt: Date.now(),
       };
       setConversation(updated);
-      saveConversation(updated);
+      void saveConversation(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -81,30 +77,32 @@ function ChatInner() {
     if (startedRef.current) return;
     startedRef.current = true;
 
-    const existingId = params.get("c");
-    if (existingId) {
-      const found = getConversation(existingId);
-      if (found) {
-        setConversation(found);
-        return;
+    void (async () => {
+      const existingId = params.get("c");
+      if (existingId) {
+        const found = await getConversation(existingId);
+        if (found) {
+          setConversation(found);
+          return;
+        }
       }
-    }
 
-    const settings = getSettings();
-    const scenarioId = params.get("scenario");
-    const scenario = getScenario(scenarioId);
-    const convo: Conversation = {
-      id: genId(),
-      title: scenario ? scenario.title : "Free chat",
-      languageCode: settings.activeLanguage,
-      scenarioId: scenario ? scenario.id : null,
-      level: settings.level,
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    setConversation(convo);
-    void requestAssistant(convo);
+      const settings = getSettings();
+      const scenarioId = params.get("scenario");
+      const scenario = getScenario(scenarioId);
+      const convo: Conversation = {
+        id: crypto.randomUUID(),
+        title: scenario ? scenario.title : "Free chat",
+        languageCode: settings.activeLanguage,
+        scenarioId: scenario ? scenario.id : null,
+        level: settings.level,
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      setConversation(convo);
+      void requestAssistant(convo);
+    })();
   }, [params, requestAssistant]);
 
   // Keep the view scrolled to the latest message.
@@ -121,7 +119,7 @@ function ChatInner() {
       updatedAt: Date.now(),
     };
     setConversation(updated);
-    saveConversation(updated);
+    void saveConversation(updated);
     setInput("");
     void requestAssistant(updated);
   }

@@ -7,7 +7,7 @@ import { ArrowRight, MessageCircle, Sparkles } from "lucide-react";
 import { useSettings } from "@/lib/useSettings";
 import { LANGUAGES, getLanguage } from "@/lib/languages";
 import { SCENARIOS } from "@/lib/scenarios";
-import { getConversations, getVocab } from "@/lib/storage";
+import { getConversations, getVocab } from "@/lib/data";
 import type { Conversation, Level } from "@/lib/types";
 
 const LEVELS: Level[] = ["beginner", "intermediate", "advanced"];
@@ -19,8 +19,19 @@ export default function HomePage() {
   const [recent, setRecent] = useState<Conversation[]>([]);
 
   useEffect(() => {
-    setVocabCount(getVocab().length);
-    setRecent(getConversations().slice(0, 3));
+    let active = true;
+    void (async () => {
+      const [vocab, conversations] = await Promise.all([
+        getVocab(),
+        getConversations(),
+      ]);
+      if (!active) return;
+      setVocabCount(vocab.length);
+      setRecent(conversations.slice(0, 3));
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (!loaded) {

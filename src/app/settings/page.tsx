@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Download, Monitor, Moon, Settings as SettingsIcon, Sun, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { LogOut, Monitor, Moon, Settings as SettingsIcon, Sun } from "lucide-react";
 import { useSettings } from "@/lib/useSettings";
 import { LANGUAGES } from "@/lib/languages";
-import { exportData, importData } from "@/lib/storage";
+import { createClient } from "@/lib/supabase/client";
 import type { Level, ThemePreference } from "@/lib/types";
 
 const THEMES: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
@@ -59,33 +60,24 @@ function Toggle({
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { settings, update, loaded } = useSettings();
-  const [importMsg, setImportMsg] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [email, setEmail] = useState<string>("");
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await createClient().auth.getUser();
+      setEmail(data.user?.email ?? "");
+    })();
+  }, []);
 
   if (!loaded) {
     return <div className="clay h-40 animate-pulse rounded-3xl" />;
   }
 
-  function handleExport() {
-    const blob = new Blob([exportData()], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `cakap-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function handleImport(file: File) {
-    const text = await file.text();
-    const ok = importData(text);
-    setImportMsg(
-      ok
-        ? "Backup imported. Reloading…"
-        : "That file could not be read as a Cakap backup.",
-    );
-    if (ok) setTimeout(() => window.location.reload(), 900);
+  async function handleSignOut() {
+    await createClient().auth.signOut();
+    router.push("/login");
   }
 
   return (
@@ -194,42 +186,21 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <Card title="Your data">
+      <Card title="Account">
         <p className="text-sm text-muted-foreground">
-          Everything is stored only in this browser. Export a backup so you
-          don’t lose your words and conversations.
+          Signed in{email ? " as" : ""}{" "}
+          <span className="font-semibold text-foreground">{email}</span>. Your
+          words and conversations are saved to your account and sync across
+          devices.
         </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleExport}
-            className="clay-press flex cursor-pointer items-center gap-2 rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-          >
-            <Download className="h-4 w-4" />
-            Export backup
-          </button>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="clay-press clay-inset flex cursor-pointer items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold text-foreground"
-          >
-            <Upload className="h-4 w-4" />
-            Import backup
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleImport(file);
-            }}
-          />
-        </div>
-        {importMsg && (
-          <p className="text-sm text-muted-foreground">{importMsg}</p>
-        )}
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="clay-press flex w-fit cursor-pointer items-center gap-2 rounded-2xl bg-surface-2 px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:text-red-500"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
       </Card>
     </div>
   );
