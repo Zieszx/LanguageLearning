@@ -3,16 +3,26 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, MessageCircle, Sparkles, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  BookMarked,
+  Flame,
+  GraduationCap,
+  MessageCircle,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useSettings } from "@/lib/useSettings";
+import { useAccount } from "@/lib/account";
 import { LANGUAGES, getLanguage } from "@/lib/languages";
 import { SCENARIOS } from "@/lib/scenarios";
 import {
-  getConversations,
-  getCustomScenarios,
-  getVocab,
-  removeCustomScenario,
-} from "@/lib/storage";
+  deleteCharacter,
+  loadCharacters,
+  loadConversations,
+  loadSharedScenarios,
+  loadVocab,
+} from "@/lib/data";
 import { CharacterCreator } from "@/components/CharacterCreator";
 import type { Conversation, Level, Scenario } from "@/lib/types";
 
@@ -21,18 +31,33 @@ const LEVELS: Level[] = ["beginner", "intermediate", "advanced"];
 export default function HomePage() {
   const router = useRouter();
   const { settings, update, loaded } = useSettings();
+  const { signedIn } = useAccount();
   const [vocabCount, setVocabCount] = useState(0);
   const [recent, setRecent] = useState<Conversation[]>([]);
   const [customScenarios, setCustomScenarios] = useState<Scenario[]>([]);
+  const [sharedScenarios, setSharedScenarios] = useState<Scenario[]>([]);
 
   useEffect(() => {
-    setVocabCount(getVocab().length);
-    setRecent(getConversations().slice(0, 3));
-    setCustomScenarios(getCustomScenarios());
-  }, []);
+    let active = true;
+    void loadVocab(signedIn).then((v) => active && setVocabCount(v.length));
+    void loadConversations(signedIn).then(
+      (c) => active && setRecent(c.slice(0, 3)),
+    );
+    void loadCharacters(signedIn).then((s) => active && setCustomScenarios(s));
+    void loadSharedScenarios(signedIn).then(
+      (s) => active && setSharedScenarios(s),
+    );
+    return () => {
+      active = false;
+    };
+  }, [signedIn]);
 
   function handleDeleteCustom(id: string) {
-    setCustomScenarios(removeCustomScenario(id));
+    void deleteCharacter(signedIn, id).then(setCustomScenarios);
+  }
+
+  function refreshCharacters() {
+    void loadCharacters(signedIn).then(setCustomScenarios);
   }
 
   if (!loaded) {
@@ -151,7 +176,7 @@ export default function HomePage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <CharacterCreator
             defaultLanguage={settings.activeLanguage}
-            onCreated={() => setCustomScenarios(getCustomScenarios())}
+            onCreated={refreshCharacters}
           />
           {customScenarios.map((s) => {
             const cLang = getLanguage(s.languageCode ?? settings.activeLanguage);
@@ -197,7 +222,7 @@ export default function HomePage() {
           Or pick a scenario
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {SCENARIOS.map((s) => (
+          {[...sharedScenarios, ...SCENARIOS].map((s) => (
             <Link
               key={s.id}
               href={`/chat?scenario=${s.id}`}
@@ -217,21 +242,37 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Vocab summary */}
-      <Link
-        href="/vocab"
-        className="clay clay-press flex cursor-pointer items-center justify-between p-5"
-      >
-        <div>
-          <p className="font-display text-lg text-foreground">
-            Vocabulary bank
-          </p>
+      {/* Vocab + practice tools */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Link
+          href="/vocab"
+          className="clay clay-press flex cursor-pointer flex-col gap-2 p-5"
+        >
+          <BookMarked className="h-5 w-5 text-secondary" />
+          <p className="font-display text-lg text-foreground">Vocabulary</p>
           <p className="text-sm text-muted-foreground">
             {vocabCount} saved {vocabCount === 1 ? "word" : "words"}
           </p>
-        </div>
-        <ArrowRight className="h-5 w-5 text-muted-foreground" />
-      </Link>
+        </Link>
+        <Link
+          href="/review"
+          className="clay clay-press flex cursor-pointer flex-col gap-2 p-5"
+        >
+          <GraduationCap className="h-5 w-5 text-primary" />
+          <p className="font-display text-lg text-foreground">Review</p>
+          <p className="text-sm text-muted-foreground">
+            Flashcards from your words
+          </p>
+        </Link>
+        <Link
+          href="/progress"
+          className="clay clay-press flex cursor-pointer flex-col gap-2 p-5"
+        >
+          <Flame className="h-5 w-5 text-accent" />
+          <p className="font-display text-lg text-foreground">Progress</p>
+          <p className="text-sm text-muted-foreground">Streaks & activity</p>
+        </Link>
+      </div>
     </div>
   );
 }

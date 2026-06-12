@@ -6,122 +6,161 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Send } from "lucide-react";
 import { getLanguage } from "@/lib/languages";
 import { getScenario } from "@/lib/scenarios";
+import { genId } from "@/lib/storage";
+import { extractPartialReply, parseReply } from "@/lib/parseReply";
+import { useAccount } from "@/lib/account";
 import {
-  genId,
-  getConversation,
-  getCustomScenarios,
-  getSettings,
-  getVocab,
-  saveConversation,
-} from "@/lib/storage";
+  loadCharacters,
+  loadConversation,
+  loadSettings,
+  loadSharedScenarios,
+  loadVocab,
+  logPractice,
+  storeConversation,
+} from "@/lib/data";
 import type {
   AssistantReply,
   ChatMessage,
   Conversation,
 } from "@/lib/types";
 import { MessageBubble } from "@/components/MessageBubble";
+import { VoiceInputButton } from "@/components/VoiceInputButton";
 
 function ChatInner() {
   const params = useSearchParams();
+  const { signedIn } = useAccount();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Calls the API for the next assistant turn and appends it.
-  const requestAssistant = useCallback(async (convo: Conversation) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          languageCode: convo.languageCode,
-          level: convo.level,
-          scenarioId: convo.scenarioId,
-          scenario: convo.scenario ?? null,
-          vocab: getVocab()
-            .filter((v) => v.language === convo.languageCode)
-            .map((v) => ({ word: v.word })),
-          messages: convo.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Request failed");
+  const requestAssistant = useCallback(
+    async (convo: Conversation) => {
+      setLoading(true);
+      setError(null);
+      setStreamingText("");
+      try {
+        const vocab = await loadVocab(signedIn);
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            languageCode: convo.languageCode,
+            level: convo.level,
+            scenarioId: convo.scenarioId,
+            scenario: convo.scenario ?? null,
+            stream: true,
+            vocab: vocab
+              .filter((v) => v.language === convo.languageCode)
+              .map((v) => ({ word: v.word })),
+            messages: convo.messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+          }),
+        });
 
-      const reply = data as AssistantReply;
-      const assistantMsg: ChatMessage = {
-        role: "assistant",
-        content: reply.reply,
-        translation: reply.reply_translation,
-        romanization: reply.reply_romanization,
-        corrections: reply.corrections ?? [],
-        vocabSuggestions: reply.vocab_suggestions ?? [],
-      };
-      const updated: Conversation = {
-        ...convo,
-        messages: [...convo.messages, assistantMsg],
-        updatedAt: Date.now(),
-      };
-      setConversation(updated);
-      saveConversation(updated);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        let reply: AssistantReply;
+        const contentType = res.headers.get("Content-Type") ?? "";
+        if (res.ok && res.body && contentType.includes("text/plain")) {
+          // Streamed raw model text: show the reply as it arrives.
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let raw = "";
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            raw += decoder.decode(value, { stream: true });
+            setStreamingText(extractPartialReply(raw));
+          }
+          reply = parseReply(raw);
+        } else {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Request failed");
+          reply = data as AssistantReply;
+        }
+
+        const assistantMsg: ChatMessage = {
+          role: "assistant",
+          content: reply.reply,
+          translation: reply.reply_translation,
+          romanization: reply.reply_romanization,
+          corrections: reply.corrections ?? [],
+          vocabSuggestions: reply.vocab_suggestions ?? [],
+        };
+        const updated: Conversation = {
+          ...convo,
+          messages: [...convo.messages, assistantMsg],
+          updatedAt: Date.now(),
+        };
+        setConversation(updated);
+        void storeConversation(signedIn, updated);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      } finally {
+        setLoading(false);
+        setStreamingText("");
+      }
+    },
+    [signedIn],
+  );
 
   // Load an existing conversation or create a new one from the URL params.
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
 
-    const existingId = params.get("c");
-    if (existingId) {
-      const found = getConversation(existingId);
-      if (found) {
-        setConversation(found);
-        return;
+    void (async () => {
+      const existingId = params.get("c");
+      if (existingId) {
+        const found = await loadConversation(signedIn, existingId);
+        if (found) {
+          setConversation(found);
+          return;
+        }
       }
-    }
 
-    const settings = getSettings();
-    const scenarioId = params.get("scenario");
-    // Resolve a built-in scenario, or a user-created custom character.
-    const scenario =
-      getScenario(scenarioId) ??
-      (scenarioId
-        ? getCustomScenarios().find((s) => s.id === scenarioId) ?? null
-        : null);
-    const convo: Conversation = {
-      id: genId(),
-      title: scenario ? scenario.title : "Free chat",
-      // A custom character can pin its own language; otherwise use the active one.
-      languageCode: scenario?.languageCode ?? settings.activeLanguage,
-      scenarioId: scenario ? scenario.id : null,
-      scenario: scenario
-        ? { character: scenario.character, situation: scenario.situation }
-        : null,
-      level: settings.level,
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    setConversation(convo);
-    void requestAssistant(convo);
-  }, [params, requestAssistant]);
+      const settings = await loadSettings(signedIn);
+      const scenarioId = params.get("scenario");
+      // Resolve a built-in scenario, or a user-created custom character.
+      let scenario = getScenario(scenarioId);
+      if (!scenario && scenarioId) {
+        const [characters, shared] = await Promise.all([
+          loadCharacters(signedIn),
+          loadSharedScenarios(signedIn),
+        ]);
+        scenario =
+          characters.find((s) => s.id === scenarioId) ??
+          shared.find((s) => s.id === scenarioId) ??
+          null;
+      }
+      const convo: Conversation = {
+        id: genId(),
+        title: scenario ? scenario.title : "Free chat",
+        // A custom character can pin its own language; else use the active one.
+        languageCode: scenario?.languageCode ?? settings.activeLanguage,
+        scenarioId: scenario ? scenario.id : null,
+        scenario: scenario
+          ? { character: scenario.character, situation: scenario.situation }
+          : null,
+        level: settings.level,
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      setConversation(convo);
+      void requestAssistant(convo);
+    })();
+  }, [params, requestAssistant, signedIn]);
 
   // Keep the view scrolled to the latest message.
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversation?.messages.length, loading]);
+  }, [conversation?.messages.length, loading, streamingText]);
 
   function handleSend() {
     const text = input.trim();
@@ -132,7 +171,8 @@ function ChatInner() {
       updatedAt: Date.now(),
     };
     setConversation(updated);
-    saveConversation(updated);
+    void storeConversation(signedIn, updated);
+    void logPractice(signedIn, "message", updated.languageCode);
     setInput("");
     void requestAssistant(updated);
   }
@@ -173,7 +213,16 @@ function ChatInner() {
           />
         ))}
 
-        {loading && (
+        {loading && streamingText && (
+          <div className="clay max-w-[92%] rounded-3xl rounded-bl-md px-5 py-3">
+            <p className="whitespace-pre-wrap text-foreground">
+              {streamingText}
+              <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-muted-foreground align-middle" />
+            </p>
+          </div>
+        )}
+
+        {loading && !streamingText && (
           <div className="clay flex w-fit items-center gap-1 rounded-3xl px-5 py-4">
             <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
             <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
@@ -202,9 +251,15 @@ function ChatInner() {
               }
             }}
             rows={1}
-            placeholder={`Type in ${lang.name}…`}
+            placeholder={`Type or speak in ${lang.name}…`}
             aria-label="Your message"
             className="max-h-32 flex-1 resize-none bg-transparent px-3 py-2 text-foreground outline-none placeholder:text-muted-foreground"
+          />
+          <VoiceInputButton
+            lang={lang.speechCode}
+            onText={(text) =>
+              setInput((prev) => (prev ? `${prev} ${text}` : text))
+            }
           />
           <button
             type="button"

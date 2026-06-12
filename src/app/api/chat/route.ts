@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { buildSystemPrompt, REPLY_SCHEMA } from "@/lib/prompts";
+import { parseReply } from "@/lib/parseReply";
 import { getScenario } from "@/lib/scenarios";
 import type {
-  AssistantReply,
   LanguageCode,
   Level,
   ProviderMessageLike,
@@ -21,34 +21,8 @@ interface ChatBody {
   scenario?: { character: string; situation: string } | null;
   vocab?: { word: string }[];
   messages: ProviderMessageLike[];
-}
-
-/**
- * Parses the model's reply defensively. Even with JSON mode, models can wrap
- * output in markdown fences or omit optional fields, so we strip fences, pull
- * out the JSON object, and backfill anything missing.
- */
-function parseReply(raw: string): AssistantReply {
-  let text = raw.trim();
-  if (text.startsWith("```")) {
-    text = text.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  }
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start > 0 || end < text.length - 1) {
-    if (start !== -1 && end !== -1) text = text.slice(start, end + 1);
-  }
-
-  const data = JSON.parse(text) as Partial<AssistantReply>;
-  return {
-    reply: data.reply ?? "",
-    reply_translation: data.reply_translation ?? null,
-    reply_romanization: data.reply_romanization ?? null,
-    corrections: Array.isArray(data.corrections) ? data.corrections : [],
-    vocab_suggestions: Array.isArray(data.vocab_suggestions)
-      ? data.vocab_suggestions
-      : [],
-  };
+  /** When true, stream the raw model text back as it's generated. */
+  stream?: boolean;
 }
 
 export async function POST(request: Request) {
@@ -91,12 +65,40 @@ export async function POST(request: Request) {
         : [{ role: "user" as const, content: "Please start the conversation." }];
 
     const provider = getProvider();
-    const raw = await provider.generate({
+    const providerReq = {
       systemPrompt,
       messages,
       jsonSchema: REPLY_SCHEMA,
-    });
+    };
 
+    // Stream the raw model text when asked (and supported). The client shows
+    // the reply as it arrives and parses the full JSON once the stream ends.
+    if (body.stream && provider.generateStream) {
+      const encoder = new TextEncoder();
+      const iterator = provider.generateStream(providerReq);
+      const stream = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            const { value, done } = await iterator.next();
+            if (done) {
+              controller.close();
+              return;
+            }
+            controller.enqueue(encoder.encode(value));
+          } catch (e) {
+            controller.error(e);
+          }
+        },
+      });
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+        },
+      });
+    }
+
+    const raw = await provider.generate(providerReq);
     const parsed = parseReply(raw);
     return NextResponse.json(parsed);
   } catch (err) {

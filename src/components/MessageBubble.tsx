@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Check, Languages, Plus, Sparkles, Volume2, Wand2 } from "lucide-react";
 import { getLanguage } from "@/lib/languages";
-import { addVocab } from "@/lib/storage";
+import { useAccount } from "@/lib/account";
+import { saveVocab } from "@/lib/data";
 import type { ChatMessage, LanguageCode } from "@/lib/types";
 
 interface Props {
@@ -28,6 +29,7 @@ function pickVoice(
 }
 
 export function MessageBubble({ message, language, showRomanization }: Props) {
+  const { signedIn } = useAccount();
   const [showTranslation, setShowTranslation] = useState(false);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const lang = getLanguage(language);
@@ -72,7 +74,7 @@ export function MessageBubble({ message, language, showRomanization }: Props) {
   }
 
   function save(word: string, meaning: string) {
-    addVocab({ word, meaning, language });
+    void saveVocab(signedIn, { word, meaning, language });
     setSaved((prev) => ({ ...prev, [word]: true }));
   }
 

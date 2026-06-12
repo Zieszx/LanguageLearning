@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Sparkles, Wand2, X } from "lucide-react";
 import { LANGUAGES } from "@/lib/languages";
-import { addCustomScenario } from "@/lib/storage";
+import { useAccount } from "@/lib/account";
+import { createCharacter } from "@/lib/data";
 import type { LanguageCode } from "@/lib/types";
 
 interface Props {
@@ -18,6 +19,7 @@ const EMOJIS = ["🎭", "😏", "😎", "🤬", "🥸", "👻", "🧑‍🍳", "
 
 export function CharacterCreator({ defaultLanguage, onCreated }: Props) {
   const router = useRouter();
+  const { signedIn } = useAccount();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [character, setCharacter] = useState("");
@@ -46,12 +48,12 @@ export function CharacterCreator({ defaultLanguage, onCreated }: Props) {
     setQuery("");
   }
 
-  function handleCreate() {
+  async function handleCreate() {
     const name = title.trim();
     const persona = character.trim();
     if (!name || !persona) return;
 
-    const created = addCustomScenario({
+    const created = await createCharacter(signedIn, {
       title: name,
       description: persona,
       character: persona,
@@ -61,6 +63,7 @@ export function CharacterCreator({ defaultLanguage, onCreated }: Props) {
       emoji,
       languageCode,
     });
+    if (!created) return;
 
     onCreated();
     reset();
@@ -208,7 +211,7 @@ export function CharacterCreator({ defaultLanguage, onCreated }: Props) {
 
       <button
         type="button"
-        onClick={handleCreate}
+        onClick={() => void handleCreate()}
         disabled={!canCreate}
         className="clay-press mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-display text-lg text-accent-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
       >
