@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LogIn } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { Logo } from "@/components/Logo";
 
 function LoginInner() {
   const router = useRouter();
@@ -34,9 +35,7 @@ function LoginInner() {
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center gap-6">
       <div className="flex flex-col items-center gap-2">
-        <span className="flex h-14 w-14 items-center justify-center rounded-3xl bg-primary text-2xl font-bold text-primary-foreground shadow-lg">
-          C
-        </span>
+        <Logo size={56} className="shadow-lg" />
         <h1 className="font-display text-2xl text-foreground">
           Welcome to Cakap
         </h1>

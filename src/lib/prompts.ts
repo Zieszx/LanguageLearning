@@ -62,6 +62,15 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     ].join("\n"),
   );
 
+  // Explicit JSON contract so providers without schema support (e.g. Groq's
+  // JSON mode) still return the exact shape we parse.
+  parts.push(
+    [
+      "Respond with ONLY a JSON object, no other text, with exactly these keys:",
+      '{ "reply": string, "reply_translation": string, "reply_romanization": string | null, "corrections": [{ "original": string, "corrected": string, "explanation": string }], "vocab_suggestions": [{ "word": string, "meaning": string }] }',
+    ].join("\n"),
+  );
+
   return parts.join("\n\n");
 }
 

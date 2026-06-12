@@ -7,6 +7,7 @@ import { BookMarked, Home, Moon, Settings, ShieldCheck, Sun } from "lucide-react
 import { useSettings } from "@/lib/useSettings";
 import { resolveDark } from "@/lib/theme";
 import { createClient } from "@/lib/supabase/client";
+import { Logo } from "@/components/Logo";
 
 const BASE_NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -51,9 +52,7 @@ export function Header() {
     <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary text-lg font-bold text-primary-foreground shadow-md">
-            C
-          </span>
+          <Logo size={36} className="shadow-md" />
           <span className="font-display text-xl text-foreground">Cakap</span>
         </Link>
 
