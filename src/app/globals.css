@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (toggled by adding `.dark` to <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #eef2ff;
+  --surface: #ffffff;
+  --surface-2: #f4f6ff;
+  --foreground: #2a2766;
+  --muted-foreground: #56548f;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #818cf8;
+  --accent: #22c55e;
+  --accent-foreground: #ffffff;
+  --border: #e0e7ff;
+  --ring: #818cf8;
+}
+
+.dark {
+  --background: #14132a;
+  --surface: #211f42;
+  --surface-2: #2a2750;
+  --foreground: #ecebff;
+  --muted-foreground: #a7a4dd;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #818cf8;
+  --accent: #22c55e;
+  --accent-foreground: #06210f;
+  --border: #38356b;
+  --ring: #818cf8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-varela), var(--font-nunito), sans-serif;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* --- Claymorphism-lite surfaces ------------------------------------------ */
+@layer components {
+  .clay {
+    background-color: var(--surface);
+    border-radius: 1.5rem;
+    box-shadow:
+      8px 8px 18px rgba(79, 70, 229, 0.12),
+      -6px -6px 14px rgba(255, 255, 255, 0.9);
+  }
+  .dark .clay {
+    box-shadow:
+      8px 8px 18px rgba(0, 0, 0, 0.45),
+      -5px -5px 12px rgba(255, 255, 255, 0.03);
+  }
+
+  .clay-inset {
+    background-color: var(--surface-2);
+    border-radius: 1.25rem;
+    box-shadow:
+      inset 4px 4px 10px rgba(79, 70, 229, 0.1),
+      inset -4px -4px 10px rgba(255, 255, 255, 0.9);
+  }
+  .dark .clay-inset {
+    box-shadow:
+      inset 4px 4px 10px rgba(0, 0, 0, 0.4),
+      inset -3px -3px 8px rgba(255, 255, 255, 0.03);
+  }
+}
+
+@layer utilities {
+  .clay-press {
+    transition:
+      transform 200ms ease-out,
+      box-shadow 200ms ease-out;
+  }
+  .clay-press:active {
+    transform: translateY(2px) scale(0.99);
+  }
+}
+
+::selection {
+  background: var(--secondary);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
