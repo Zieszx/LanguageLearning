@@ -1,4 +1,4 @@
-import type { Conversation, Settings, VocabWord } from "./types";
+import type { Conversation, Scenario, Settings, VocabWord } from "./types";
 
 /**
  * The single module that touches localStorage. Everything is namespaced and
@@ -11,6 +11,7 @@ const KEYS = {
   settings: PREFIX + "settings",
   vocab: PREFIX + "vocab",
   conversations: PREFIX + "conversations",
+  scenarios: PREFIX + "scenarios",
 } as const;
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -106,6 +107,34 @@ export function deleteConversation(id: string): Conversation[] {
   return next;
 }
 
+// --- Custom characters ------------------------------------------------------
+
+export function getCustomScenarios(): Scenario[] {
+  return read<Scenario[]>(KEYS.scenarios, []).sort(
+    (a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0),
+  );
+}
+
+export function addCustomScenario(
+  scenario: Omit<Scenario, "id" | "custom" | "createdAt">,
+): Scenario {
+  const created: Scenario = {
+    ...scenario,
+    id: genId(),
+    custom: true,
+    createdAt: Date.now(),
+  };
+  const list = read<Scenario[]>(KEYS.scenarios, []);
+  write(KEYS.scenarios, [created, ...list]);
+  return created;
+}
+
+export function removeCustomScenario(id: string): Scenario[] {
+  const next = getCustomScenarios().filter((s) => s.id !== id);
+  write(KEYS.scenarios, next);
+  return next;
+}
+
 // --- Backup -----------------------------------------------------------------
 
 export function exportData(): string {
@@ -116,6 +145,7 @@ export function exportData(): string {
       settings: getSettings(),
       vocab: getVocab(),
       conversations: getConversations(),
+      scenarios: getCustomScenarios(),
     },
     null,
     2,
@@ -129,6 +159,8 @@ export function importData(json: string): boolean {
     if (Array.isArray(data.vocab)) write(KEYS.vocab, data.vocab);
     if (Array.isArray(data.conversations))
       write(KEYS.conversations, data.conversations);
+    if (Array.isArray(data.scenarios))
+      write(KEYS.scenarios, data.scenarios);
     return true;
   } catch {
     return false;

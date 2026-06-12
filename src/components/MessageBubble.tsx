@@ -12,6 +12,21 @@ interface Props {
   showRomanization: boolean;
 }
 
+/** Finds the best installed speech voice for a BCP-47 code, e.g. "ms-MY". */
+function pickVoice(
+  voices: SpeechSynthesisVoice[],
+  code: string,
+): SpeechSynthesisVoice | null {
+  const target = code.toLowerCase();
+  const base = target.split("-")[0];
+  return (
+    voices.find((v) => v.lang.toLowerCase() === target) ??
+    voices.find((v) => v.lang.toLowerCase().replace("_", "-") === target) ??
+    voices.find((v) => v.lang.toLowerCase().startsWith(base)) ??
+    null
+  );
+}
+
 export function MessageBubble({ message, language, showRomanization }: Props) {
   const [showTranslation, setShowTranslation] = useState(false);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
@@ -29,10 +44,28 @@ export function MessageBubble({ message, language, showRomanization }: Props) {
 
   function speak() {
     try {
-      const utterance = new SpeechSynthesisUtterance(message.content);
-      utterance.lang = lang.speechCode;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
+      const synth = window.speechSynthesis;
+
+      const run = () => {
+        const utterance = new SpeechSynthesisUtterance(message.content);
+        utterance.lang = lang.speechCode;
+        // Browsers don't auto-pick a voice for the requested language, so a
+        // non-English language (Malay, Mandarin, Korean…) often stays silent.
+        // Explicitly choose the closest matching installed voice.
+        const voice = pickVoice(synth.getVoices(), lang.speechCode);
+        if (voice) utterance.voice = voice;
+        synth.cancel();
+        synth.speak(utterance);
+      };
+
+      // Voices load asynchronously in some browsers (notably Chrome): the first
+      // getVoices() call returns []. Wait for them before speaking.
+      if (synth.getVoices().length === 0) {
+        synth.addEventListener("voiceschanged", run, { once: true });
+        synth.getVoices(); // nudge the browser to load them
+      } else {
+        run();
+      }
     } catch {
       /* speech not supported */
     }

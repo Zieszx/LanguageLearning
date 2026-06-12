@@ -60,6 +60,12 @@ export interface Scenario {
   /** The situation the user is dropped into. */
   situation: string;
   emoji: string;
+  /** True for user-created characters stored in the browser. */
+  custom?: boolean;
+  /** Preferred language for a custom character (overrides the active one). */
+  languageCode?: LanguageCode;
+  /** Creation time for custom characters (used for ordering). */
+  createdAt?: number;
 }
 
 export interface Conversation {
@@ -67,6 +73,9 @@ export interface Conversation {
   title: string;
   languageCode: LanguageCode;
   scenarioId: string | null;
+  /** Snapshot of the roleplay character so the chat keeps working even for
+   *  custom characters not in the built-in list (or ones later deleted). */
+  scenario?: { character: string; situation: string } | null;
   level: Level;
   messages: ChatMessage[];
   createdAt: number;

@@ -3,12 +3,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, MessageCircle, Sparkles } from "lucide-react";
+import { ArrowRight, MessageCircle, Sparkles, Trash2 } from "lucide-react";
 import { useSettings } from "@/lib/useSettings";
 import { LANGUAGES, getLanguage } from "@/lib/languages";
 import { SCENARIOS } from "@/lib/scenarios";
-import { getConversations, getVocab } from "@/lib/storage";
-import type { Conversation, Level } from "@/lib/types";
+import {
+  getConversations,
+  getCustomScenarios,
+  getVocab,
+  removeCustomScenario,
+} from "@/lib/storage";
+import { CharacterCreator } from "@/components/CharacterCreator";
+import type { Conversation, Level, Scenario } from "@/lib/types";
 
 const LEVELS: Level[] = ["beginner", "intermediate", "advanced"];
 
@@ -17,11 +23,17 @@ export default function HomePage() {
   const { settings, update, loaded } = useSettings();
   const [vocabCount, setVocabCount] = useState(0);
   const [recent, setRecent] = useState<Conversation[]>([]);
+  const [customScenarios, setCustomScenarios] = useState<Scenario[]>([]);
 
   useEffect(() => {
     setVocabCount(getVocab().length);
     setRecent(getConversations().slice(0, 3));
+    setCustomScenarios(getCustomScenarios());
   }, []);
+
+  function handleDeleteCustom(id: string) {
+    setCustomScenarios(removeCustomScenario(id));
+  }
 
   if (!loaded) {
     return <div className="clay h-40 animate-pulse rounded-3xl" />;
@@ -132,6 +144,52 @@ export default function HomePage() {
           </div>
         </section>
       )}
+
+      {/* Your characters */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-display text-xl text-foreground">Your characters</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <CharacterCreator
+            defaultLanguage={settings.activeLanguage}
+            onCreated={() => setCustomScenarios(getCustomScenarios())}
+          />
+          {customScenarios.map((s) => {
+            const cLang = getLanguage(s.languageCode ?? settings.activeLanguage);
+            return (
+              <div
+                key={s.id}
+                className="clay relative flex flex-col gap-2 p-5"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCustom(s.id)}
+                  aria-label={`Delete ${s.title}`}
+                  className="clay-press absolute right-3 top-3 flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-red-500"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <Link
+                  href={`/chat?scenario=${s.id}`}
+                  className="clay-press flex cursor-pointer flex-col gap-2"
+                >
+                  <span className="text-3xl" aria-hidden>
+                    {s.emoji}
+                  </span>
+                  <span className="font-display text-lg text-foreground">
+                    {s.title}
+                  </span>
+                  <span className="line-clamp-2 text-sm text-muted-foreground">
+                    {s.description}
+                  </span>
+                  <span className="mt-1 text-xs font-semibold text-primary">
+                    {cLang.flag} {cLang.name}
+                  </span>
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Scenarios */}
       <section className="flex flex-col gap-3">

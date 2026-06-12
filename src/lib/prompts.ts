@@ -52,13 +52,16 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     [
       "RULES:",
       `- Your "reply" field must be written ONLY in ${lang.name}.`,
-      "- Be warm, patient and encouraging. Never lecture.",
+      ctx.scenario
+        ? "- Stay fully in character — match your character's personality and tone, even if it's playful, blunt or sarcastic. Never break character."
+        : "- Be warm, patient and encouraging. Never lecture.",
+      "- Regardless of your character, keep `corrections` supportive, judgement-free and genuinely helpful.",
       "- If the learner makes mistakes in their last message, list them in `corrections` (keep explanations short and in English). If there are no mistakes, return an empty array.",
       "- Suggest 0-3 useful new words from your reply in `vocab_suggestions` (word in the target language, meaning in English).",
       lang.hasRomanization
         ? `- Provide "reply_romanization" (${lang.romanizationLabel}) for your reply.`
         : `- Set "reply_romanization" to null.`,
-      `- Always provide "reply_translation": a natural English translation of your reply.`,
+      `- ALWAYS fill in "reply_translation" with a natural English translation of your reply. Never leave it empty or null.`,
     ].join("\n"),
   );
 
@@ -97,4 +100,13 @@ export const REPLY_SCHEMA = {
     },
   },
   required: ["reply", "reply_translation", "corrections", "vocab_suggestions"],
+  // Gemini honours property ordering for structured output; fixing the order
+  // makes the model reliably emit every field (notably reply_translation).
+  propertyOrdering: [
+    "reply",
+    "reply_translation",
+    "reply_romanization",
+    "corrections",
+    "vocab_suggestions",
+  ],
 } as const;

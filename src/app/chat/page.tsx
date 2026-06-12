@@ -9,6 +9,7 @@ import { getScenario } from "@/lib/scenarios";
 import {
   genId,
   getConversation,
+  getCustomScenarios,
   getSettings,
   getVocab,
   saveConversation,
@@ -41,6 +42,7 @@ function ChatInner() {
           languageCode: convo.languageCode,
           level: convo.level,
           scenarioId: convo.scenarioId,
+          scenario: convo.scenario ?? null,
           vocab: getVocab()
             .filter((v) => v.language === convo.languageCode)
             .map((v) => ({ word: v.word })),
@@ -92,12 +94,21 @@ function ChatInner() {
 
     const settings = getSettings();
     const scenarioId = params.get("scenario");
-    const scenario = getScenario(scenarioId);
+    // Resolve a built-in scenario, or a user-created custom character.
+    const scenario =
+      getScenario(scenarioId) ??
+      (scenarioId
+        ? getCustomScenarios().find((s) => s.id === scenarioId) ?? null
+        : null);
     const convo: Conversation = {
       id: genId(),
       title: scenario ? scenario.title : "Free chat",
-      languageCode: settings.activeLanguage,
+      // A custom character can pin its own language; otherwise use the active one.
+      languageCode: scenario?.languageCode ?? settings.activeLanguage,
       scenarioId: scenario ? scenario.id : null,
+      scenario: scenario
+        ? { character: scenario.character, situation: scenario.situation }
+        : null,
       level: settings.level,
       messages: [],
       createdAt: Date.now(),
